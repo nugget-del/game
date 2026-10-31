@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draw & Guess - Live Lounge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        canvas { touch-action: none; cursor: crosshair; }
+        .color-swatch { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid #e5e7eb; transition: transform 0.1s;}
+        .color-swatch:hover { transform: scale(1.1); }
+        .color-swatch.active { border-color: #3b82f6; box-shadow: 0 0 0 2px #93c5fd; }
+        .hide { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col text-gray-800 font-sans">
+
+    <!-- 1. Login View -->
+    <div id="login-view" class="flex-1 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
+        <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm text-center">
+            <h1 class="text-3xl font-bold mb-2 text-indigo-600">🎨 Draw & Guess</h1>
+            <p class="text-gray-500 mb-6">Live Music Lounge & Canvas</p>
+            <input type="text" id="username" placeholder="กรอกชื่อของคุณ..." class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-4" maxlength="15">
+            <button onclick="login()" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition">เข้าสู่ระบบ</button>
+        </div>
+    </div>
+
+    <!-- 2. Room Selection View (Lobby) -->
+    <div id="room-view" class="hide flex-1 p-8 bg-gray-50 overflow-y-auto">
+        <div class="max-w-5xl mx-auto">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-2xl font-bold">เลือกล็อบบี้ (ผู้ใช้: <span id="display-name" class="text-indigo-600"></span>)</h2>
+                <div class="flex gap-4">
+                    <button onclick="createRoom()" class="bg-green-500 text-white hover:bg-green-600 px-4 py-2 rounded-lg transition font-bold shadow"><i class="fas fa-plus"></i> สร้างห้องใหม่</button>
+                    <button onclick="logout()" class="text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg transition"><i class="fas fa-sign-out-alt"></i> ออกจากระบบ</button>
+                </div>
+            </div>
+            <!-- Room Container -->
+            <div id="rooms-container" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- ข้อมูลห้องจะถูกสร้างด้วย JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Game View -->
+    <div id="game-view" class="hide flex-1 flex flex-col h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm px-6 py-3 flex justify-between items-center z-10">
+            <div>
+                <h1 class="text-xl font-bold text-gray-800" id="room-title">Room Name</h1>
+                <p class="text-sm text-gray-500">กำลังเล่นในฐานะ: <span id="player-name" class="font-semibold text-indigo-600"></span></p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="bg-indigo-50 text-indigo-700 px-4 py-1 rounded-full font-bold shadow-inner">
+                    <i class="fas fa-clock"></i> <span id="timer-display">00:00</span>
+                </div>
+                <button onclick="leaveRoom()" class="bg-red-100 text-red-600 px-4 py-2 rounded-lg font-semibold hover:bg-red-200 transition">
+                    <i class="fas fa-door-open"></i> ออกจากห้อง
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex overflow-hidden">
+            <!-- Left: Canvas Area -->
+            <div class="flex-1 flex flex-col p-4 bg-gray-200">
+                
+                <!-- Toolbar -->
+                <div class="bg-white p-3 rounded-t-xl shadow flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <!-- Color Presets -->
+                        <div class="flex gap-2" id="color-palette">
+                            <div class="color-swatch active" style="background-color: #000000" onclick="setColor('#000000', this)"></div>
+                            <div class="color-swatch" style="background-color: #ef4444" onclick="setColor('#ef4444', this)"></div>
+                            <div class="color-swatch" style="background-color: #f59e0b" onclick="setColor('#f59e0b', this)"></div>
+                            <div class="color-swatch" style="background-color: #eab308" onclick="setColor('#eab308', this)"></div>
+                            <div class="color-swatch" style="background-color: #22c55e" onclick="setColor('#22c55e', this)"></div>
+                            <div class="color-swatch" style="background-color: #3b82f6" onclick="setColor('#3b82f6', this)"></div>
+                            <div class="color-swatch" style="background-color: #a855f7" onclick="setColor('#a855f7', this)"></div>
+                            <div class="color-swatch" style="background-color: #ec4899" onclick="setColor('#ec4899', this)"></div>
+                        </div>
+                        <!-- Custom Color Picker -->
+                        <input type="color" id="custom-color" class="w-8 h-8 rounded cursor-pointer border-0 p-0" onchange="setColor(this.value, null)">
+                        
+                        <div class="h-6 w-px bg-gray-300 mx-2"></div>
+                        
+                        <!-- Tools -->
+                        <input type="range" id="brush-size" min="1" max="20" value="5" class="w-24">
+                        <button onclick="setEraser()" class="p-2 text-gray-600 hover:bg-gray-100 rounded" title="ยางลบ"><i class="fas fa-eraser"></i></button>
+                        <button onclick="clearCanvas()" class="p-2 text-red-600 hover:bg-red-50 rounded" title="ล้างกระดาน"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+
+                <!-- Canvas Container -->
+                <div class="flex-1 bg-white relative rounded-b-xl shadow border-t border-gray-100 overflow-hidden" id="canvas-container">
+                    <canvas id="drawing-board" class="absolute top-0 left-0 w-full h-full"></canvas>
+                    
+                    <!-- Pre-Game Overlay -->
+                    <div id="setup-overlay" class="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-20 hide">
+                        <div class="bg-white p-6 rounded-xl shadow-xl text-center border">
+                            <h3 class="text-xl font-bold mb-4">ตั้งค่าก่อนวาด</h3>
+                            <p class="mb-2 text-sm text-gray-600">คำใบ้: <span id="secret-word" class="font-bold text-black text-lg">แมว</span></p>
+                            <label class="block text-sm mb-1">เวลาในการวาด (วินาที):</label>
+                            <input type="number" id="time-input" value="30" class="w-24 px-2 py-1 border rounded mb-4 text-center">
+                            <br>
+                            <button onclick="startGame()" class="bg-green-500 text-white px-6 py-2 rounded-full font-bold hover:bg-green-600 shadow-md transform hover:scale-105 transition">เริ่มวาดภาพ!</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Chat & Guessing Area -->
+            <div class="w-80 bg-white border-l flex flex-col shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.1)] z-10">
+                
+                <!-- Player List -->
+                <div class="p-3 bg-gray-50 border-b text-sm">
+                    <div class="font-bold text-gray-700 mb-1"><i class="fas fa-users"></i> ผู้เล่นในห้อง:</div>
+                    <div id="room-players-list" class="text-gray-600 line-clamp-2"></div>
+                </div>
+
+                <!-- Status Box -->
+                <div class="bg-indigo-50 p-4 border-b">
+                    <h3 class="font-bold text-indigo-800" id="game-status">เตรียมตัวเล่น...</h3>
+                    <p class="text-sm text-indigo-600 mt-1" id="guess-lives">รอเริ่มเกม</p>
+                </div>
+
+                <!-- Chat Messages -->
+                <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-3 bg-white">
+                    <div class="text-center text-xs text-gray-400 my-2">-- ยินดีต้อนรับเข้าสู่ห้อง --</div>
+                </div>
+
+                <!-- Input Area -->
+                <div class="p-3 border-t bg-gray-50">
+                    <div class="flex gap-2">
+                        <input type="text" id="chat-input" placeholder="พิมพ์ทายรูปภาพที่นี่..." class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" disabled onkeypress="handleEnter(event)">
+                        <button id="send-btn" onclick="sendGuess()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50" disabled><i class="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State Management ---
+        let currentUser = "";
+        let isDrawingMode = false;
+        let timer = 0;
+        let interval;
+        let guessesLeft = 3;
+        const words = ["แมว", "รถยนต์", "แอปเปิ้ล", "โทรศัพท์", "ต้นไม้", "พิซซ่า"];
+        let currentWord = "";
+        let currentRoomObj = null;
+        
+        // --- Rooms Data ---
+        let defaultRooms = [
+            { id: 'room-1', name: '🔴 Room 01: Bot Lounge', desc: 'ห้องนี้มีบอทร่วมเล่น', players: ['Bot A', 'Bot B'], hasBots: true, isCustom: false, max: 10, theme: 'border-red-400' },
+            { id: 'room-2', name: '🔵 Room 02: Chill Out', desc: 'ห้องเปล่า รอเพื่อนมาแจม', players: [], hasBots: false, isCustom: false, max: 10, theme: 'border-blue-400' },
+            { id: 'room-3', name: '🟢 Room 03: Speed Play', desc: 'ห้องเปล่า สายสปีด', players: [], hasBots: false, isCustom: false, max: 10, theme: 'border-green-400' }
+        ];
+        let rooms = [...defaultRooms];
+
+        // --- Canvas Variables ---
+        const canvas = document.getElementById('drawing-board');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const canvasContainer = document.getElementById('canvas-container');
+        let isPainting = false;
+        let brushColor = "#000000";
+
+        // Resize canvas
+        function resizeCanvas() {
+            canvas.width = canvasContainer.clientWidth;
+            canvas.height = canvasContainer.clientHeight;
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // --- Auth & Lobby Logic ---
+        function login() {
+            const name = document.getElementById('username').value.trim();
+            if(!name) { alert("กรุณาใส่ชื่อของคุณ!"); return; }
+            currentUser = name;
+            document.getElementById('display-name').innerText = currentUser;
+            document.getElementById('player-name').innerText = currentUser;
+            document.getElementById('login-view').classList.add('hide');
+            document.getElementById('room-view').classList.remove('hide');
+            renderRooms();
+        }
+
+        function logout() {
+            currentUser = "";
+            document.getElementById('username').value = "";
+            document.getElementById('room-view').classList.add('hide');
+            document.getElementById('login-view').classList.remove('hide');
+        }
+
+        function renderRooms() {
+            const container = document.getElementById('rooms-container');
+            container.innerHTML = '';
+            rooms.forEach(room => {
+                const count = room.players.length;
+                const statusColor = count >= room.max ? 'text-red-500' : (count > 0 ? 'text-orange-500' : 'text-green-500');
+                const statusText = count >= room.max ? 'เต็มแล้ว' : `ว่าง (${count}/${room.max})`;
+                
+                const deleteBtnHtml = room.isCustom ? 
+                    `<button onclick="deleteRoom('${room.id}', event)" class="text-red-500 hover:bg-red-100 p-2 rounded-full transition" title="ลบห้องนี้"><i class="fas fa-trash"></i></button>` : '';
+
+                const cardHtml = `
+                    <div class="bg-white rounded-xl shadow p-6 hover:shadow-lg transition cursor-pointer border-t-4 ${room.theme} relative" onclick="joinRoom('${room.id}')">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="text-xl font-bold pr-8">${room.name}</h3>
+                            <div class="absolute top-4 right-4 z-10">${deleteBtnHtml}</div>
+                        </div>
+                        <p class="text-gray-500 text-sm mb-4 h-10">${room.desc}</p>
+                        <div class="flex justify-between items-center text-sm font-semibold">
+                            <span class="${statusColor}">${statusText}</span>
+                            <span class="bg-gray-100 px-3 py-1 rounded-full text-gray-700">เข้าร่วม <i class="fas fa-arrow-right"></i></span>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += cardHtml;
+            });
+        }
+
+        function createRoom() {
+            const roomName = prompt("ตั้งชื่อห้องใหม่ของคุณ (สูงสุด 20 ตัวอักษร):");
+            if(roomName && roomName.trim() !== "") {
+                const newRoom = {
+                    id: 'custom-' + Date.now(),
+                    name: '⭐ ' + roomName.substring(0, 20),
+                    desc: 'สร้างโดย: ' + currentUser,
+                    players: [],
+                    hasBots: false,
+                    isCustom: true,
+                    max: 10,
+                    theme: 'border-yellow-400'
+                };
+                rooms.unshift(newRoom); // นำห้องใหม่ไว้บนสุด
+                renderRooms();
+                joinRoom(newRoom.id); // เข้าห้องทันที
+            }
+        }
+
+        function deleteRoom(id, event) {
+            event.stopPropagation();
+            if(confirm("คุณต้องการลบห้องนี้ทิ้งใช่หรือไม่?")) {
+                rooms = rooms.filter(r => r.id !== id);
+                renderRooms();
+            }
+        }
+
+        // --- Game Room Logic ---
+        function joinRoom(id) {
+            currentRoomObj = rooms.find(r => r.id === id);
+            if(currentRoomObj.players.length >= currentRoomObj.max) {
+                alert("ห้องเต็มแล้วครับ!"); return;
+            }
+            
+            // เพิ่มผู้เล่นเข้าห้อง
+            if(!currentRoomObj.players.includes(currentUser)) {
+                currentRoomObj.players.push(currentUser);
+            }
+
+            document.getElementById('room-title').innerText = currentRoomObj.name;
+            updatePlayerListUI();
+            
+            document.getElementById('room-view').classList.add('hide');
+            document.getElementById('game-view').classList.remove('hide');
+            
+            // Random word
+            currentWord = words[Math.floor(Math.random() * words.length)];
+            document.getElementById('secret-word').innerText = currentWord;
+            
+            resetGameUI();
+            setTimeout(resizeCanvas, 100);
+        }
+
+        function leaveRoom() {
+            clearInterval(interval);
+            // นำชื่อออกจากห้อง
+            if(currentRoomObj) {
+                currentRoomObj.players = currentRoomObj.players.filter(p => p !== currentUser);
+            }
+            currentRoomObj = null;
+            
+            document.getElementById('game-view').classList.add('hide');
+            document.getElementById('room-view').classList.remove('hide');
+            renderRooms();
+        }
+
+        function updatePlayerListUI() {
+            if(currentRoomObj) {
+                document.getElementById('room-players-list').innerText = currentRoomObj.players.join(', ');
+            }
+        }
+
+        function resetGameUI() {
+            document.getElementById('setup-overlay').classList.remove('hide');
+            document.getElementById('chat-input').disabled = true;
+            document.getElementById('send-btn').disabled = true;
+            document.getElementById('game-status').innerText = "เตรียมตัวเล่น...";
+            document.getElementById('guess-lives').innerText = "รอคุณเริ่มวาด";
+            document.getElementById('timer-display').innerText = "00:00";
+            document.getElementById('chat-box').innerHTML = '<div class="text-center text-xs text-gray-400 my-2">-- ระบบพร้อมแล้ว --</div>';
+            if(ctx) { ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+            isDrawingMode = false;
+        }
+
+        function startGame() {
+            const timeVal = parseInt(document.getElementById('time-input').value);
+            if(isNaN(timeVal) || timeVal < 10) { alert("กรุณาใส่เวลาอย่างน้อย 10 วินาที"); return; }
+            
+            document.getElementById('setup-overlay').classList.add('hide');
+            timer = timeVal;
+            isDrawingMode = true;
+            document.getElementById('game-status').innerText = "🎨 ตากำลังวาดรูป...";
+            document.getElementById('guess-lives').innerText = "คุณเป็นคนวาดรูปนี้";
+            updateTimerDisplay();
+            
+            interval = setInterval(() => {
+                timer--;
+                updateTimerDisplay();
+                if(timer <= 0) {
+                    endDrawingPhase();
+                }
+            }, 1000);
+            
+            // จำลองการเล่นบอทเฉพาะในห้องที่มีบอท
+            if(currentRoomObj.hasBots) {
+                addChatMessage("System", "บอทกำลังจับตาดูรูปภาพของคุณ...", "sys");
+            }
+        }
+
+        function updateTimerDisplay() {
+            const m = String(Math.floor(timer/60)).padStart(2, '0');
+            const s = String(timer%60).padStart(2, '0');
+            document.getElementById('timer-display').innerText = `${m}:${s}`;
+        }
+
+        function endDrawingPhase() {
+            clearInterval(interval);
+            isDrawingMode = false; // Lock canvas
+            document.getElementById('game-status').innerText = "❓ หมดเวลา! ตาเพื่อนทาย";
+            guessesLeft = 3;
+            document.getElementById('guess-lives').innerText = `เหลือโอกาสทาย: ${guessesLeft} ครั้ง`;
+            
+            // Enable chat for guessing
+            document.getElementById('chat-input').disabled = false;
+            document.getElementById('send-btn').disabled = false;
+            document.getElementById('chat-input').focus();
+
+            addChatMessage("System", "เริ่มทายได้! คุณมีโอกาส 3 ครั้ง", "sys");
+            
+            // Simulate bots guessing wrong ONLY in bot room
+            if(currentRoomObj.hasBots) {
+                setTimeout(() => addChatMessage("Bot A", "หมาแน่ๆ"), 2000);
+                setTimeout(() => addChatMessage("Bot B", "ดูเหมือนบ้านนะ"), 4500);
+            }
+        }
+
+        // --- Chat & Guessing ---
+        function handleEnter(e) {
+            if(e.key === 'Enter') sendGuess();
+        }
+
+        function sendGuess() {
+            const input = document.getElementById('chat-input');
+            const msg = input.value.trim();
+            if(!msg || guessesLeft <= 0) return;
+            
+            addChatMessage(currentUser, msg, "self");
+            input.value = "";
+            
+            if(msg === currentWord) {
+                addChatMessage("System", `🎉 ${currentUser} ทายถูก! คำตอบคือ "${currentWord}"`, "win");
+                endGameRound();
+            } else {
+                guessesLeft--;
+                document.getElementById('guess-lives').innerText = `เหลือโอกาสทาย: ${guessesLeft} ครั้ง`;
+                if(guessesLeft <= 0) {
+                    addChatMessage("System", `❌ คุณใช้โอกาสหมดแล้ว! (คำตอบคือ: ${currentWord})`, "sys");
+                    endGameRound();
+                }
+            }
+        }
+
+        function addChatMessage(sender, text, type="normal") {
+            const box = document.getElementById('chat-box');
+            const div = document.createElement('div');
+            
+            if(type === "sys") {
+                div.className = "text-center text-xs text-indigo-500 my-2";
+                div.innerText = `-- ${text} --`;
+            } else if (type === "win") {
+                div.className = "bg-green-100 border border-green-200 text-green-800 p-2 rounded-lg text-sm font-bold text-center my-2";
+                div.innerText = text;
+            } else {
+                const isSelf = type === "self";
+                div.className = `flex flex-col ${isSelf ? 'items-end' : 'items-start'}`;
+                div.innerHTML = `
+                    <span class="text-[10px] text-gray-400 ml-1 mb-1">${sender}</span>
+                    <div class="${isSelf ? 'bg-indigo-600 text-white rounded-tl-lg rounded-tr-lg rounded-bl-lg' : 'bg-white border rounded-tl-lg rounded-tr-lg rounded-br-lg'} px-3 py-2 text-sm shadow-sm max-w-[90%] break-words">
+                        ${text}
+                    </div>
+                `;
+            }
+            
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function endGameRound() {
+            document.getElementById('chat-input').disabled = true;
+            document.getElementById('send-btn').disabled = true;
+            setTimeout(() => {
+                if(confirm("จบเกม! ต้องการเริ่มวาดรอบใหม่หรือไม่?")) {
+                    currentWord = words[Math.floor(Math.random() * words.length)];
+                    document.getElementById('secret-word').innerText = currentWord;
+                    resetGameUI();
+                }
+            }, 1500);
+        }
+
+        // --- Canvas Drawing Logic ---
+        function startPosition(e) {
+            if(!isDrawingMode) return;
+            isPainting = true;
+            draw(e);
+        }
+
+        function endPosition() {
+            isPainting = false;
+            ctx.beginPath();
+        }
+
+        function draw(e) {
+            if(!isPainting || !isDrawingMode) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+            
+            if(e.type.includes('touch')) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            ctx.lineWidth = document.getElementById('brush-size').value;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = brushColor;
+
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        canvas.addEventListener('mousedown', startPosition);
+        canvas.addEventListener('mouseup', endPosition);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseout', endPosition);
+        
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPosition(e); }, {passive: false});
+        canvas.addEventListener('touchend', endPosition);
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); }, {passive: false});
+
+        // --- Tools Logic ---
+        function setColor(color, element) {
+            brushColor = color;
+            document.querySelectorAll('.color-swatch').forEach(el => el.classList.remove('active'));
+            if(element) element.classList.add('active');
+        }
+
+        function setEraser() {
+            brushColor = "#ffffff";
+            document.querySelectorAll('.color-swatch').forEach(el => el.classList.remove('active'));
+        }
+
+        function clearCanvas() {
+            if(!isDrawingMode) return;
+            if(confirm('แน่ใจหรือไม่ว่าต้องการล้างกระดาน?')) {
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+    </script>
+</body>
+</html>
